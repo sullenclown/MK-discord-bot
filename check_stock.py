@@ -6,16 +6,16 @@ from bs4 import BeautifulSoup
 # 設定要監控的多個丸久小山園商品列表 (可自由增減品項)
 TARGET_PRODUCTS = [
     {
-        "name": "五十鈴 100g 罐裝",
-        "url": "https://www.marukyu-koyamaen.co.jp/ec/products/detail/101",  # 替換為實際網址
+        "name": "五十鈴 罐裝",
+        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1191040c1",  # 替換為實際網址
     },
     {
-        "name": "青嵐 100g 罐裝",
-        "url": "https://www.marukyu-koyamaen.co.jp/ec/products/detail/102",  # 替換為實際網址
+        "name": "青嵐 罐裝",
+        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/11a1040c1",  # 替換為實際網址
     },
     {
-        "name": "又玄 100g 罐裝",
-        "url": "https://www.marukyu-koyamaen.co.jp/ec/products/detail/103",  # 替換為實際網址
+        "name": "又玄 罐裝",
+        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1171020c1",  # 替換為實際網址
     },
 ]
 
