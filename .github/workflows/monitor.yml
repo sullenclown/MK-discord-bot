@@ -2,29 +2,28 @@ name: Koyamaen Discord Monitor
 
 on:
   schedule:
-    # 每 5 分鐘自動執行一次
-    - cron: '*/5 * * * *'
-  workflow_dispatch: # 支援在 GitHub 介面上手動測試按紐
+    # UTC 時間 23:00 至 09:00（對應台灣時間週一至週五 07:00 ~ 17:00），每 5 分鐘檢查一次
+    - cron: '*/5 23,0-8 * * 1-5'
+  workflow_dispatch: # 保留手動點擊 Run workflow 功能
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-
     steps:
-    - name: 取得專案程式碼
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: 設定 Python 環境
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: 安裝相依套件
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests beautifulsoup4
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
 
-    - name: 執行庫存檢查
-      env:
-        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      run: python check_stock.py
+      - name: Run stock check
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python check_stock.py
