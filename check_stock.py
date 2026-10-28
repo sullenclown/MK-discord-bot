@@ -78,4 +78,6 @@ def main():
         print("錯誤：未設定 DISCORD_WEBHOOK_URL 變數")
         sys.exit(1)
 
-    print("開始執行全品項庫存
+    print("開始執行全品項庫存檢查...")
+    for product in TARGET_PRODUCTS:
+        check_product_stock(product)
