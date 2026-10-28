@@ -3,7 +3,7 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-# 您要監控的丸久小山園英文版官網商品清單
+# 丸久小山園英文版官網商品監控清單
 TARGET_PRODUCTS = [
     {
         "name": "青嵐 (Aoarashi)",
@@ -21,7 +21,6 @@ TARGET_PRODUCTS = [
         "name": "千木の白 (Chigi no Shiro)",
         "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",
     },
-    
 ]
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
@@ -61,7 +60,7 @@ def check_product_stock(product):
                 {
                     "title": f"【補貨通知】{product['name']}",
                     "description": f"檢測到商品已開放購買，請速前往搶購！\n[點我前往商品頁面]({product['url']})",
-                    "color": 3066993,
+                    "color": 3066993,  # 翡翠綠
                 }
             ],
         }
