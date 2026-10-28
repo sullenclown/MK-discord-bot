@@ -1,83 +1,34 @@
 import os
 import sys
 import requests
-from bs4 import BeautifulSoup
-
-# 您要監控的丸久小山園英文版官網商品清單
-TARGET_PRODUCTS = [
-    {
-        "name": "五十鈴 (Isuzu)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",
-    },
-    {
-        "name": "又玄 (Yugen)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1171020c1",
-    },
-    {
-        "name": "青嵐 (Aoarashi)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1191040c1",
-    },
-]
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 
-def check_product_stock(product):
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-
-    try:
-        response = requests.get(product["url"], headers=headers, timeout=10)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"[{product['name']}] 網頁抓取失敗: {e}")
-        return
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    page_text = soup.get_text().lower()
-
-    # 英文版庫存判斷邏輯
-    cart_button = soup.find("button", class_=lambda x: x and "add" in x.lower())
-    is_out_of_stock = "out of stock" in page_text or "sold out" in page_text
-
-    is_in_stock = (not is_out_of_stock) and (cart_button is not None)
-
-    if is_in_stock:
-        payload = {
-            "username": "丸久小山園補貨雷達",
-            "content": "@everyone 🍵 **丸久小山園補貨囉！**",
-            "embeds": [
-                {
-                    "title": f"【補貨通知】{product['name']}",
-                    "description": f"檢測到商品已開放購買，請速前往搶購！\n[點我前往商品頁面]({product['url']})",
-                    "color": 3066993,
-                }
-            ],
-        }
-        res = requests.post(DISCORD_WEBHOOK_URL, json=payload)
-        if res.status_code in (200, 204):
-            print(f"[{product['name']}] 成功發送 Discord 補貨通知！")
-        else:
-            print(f"[{product['name']}] Discord 發送失敗: {res.status_code}")
-    else:
-        print(f"[{product['name']}] 目前仍無庫存 (Out of Stock)...")
-
-
-def main():
+def send_test_notification():
     if not DISCORD_WEBHOOK_URL:
         print("錯誤：未設定 DISCORD_WEBHOOK_URL 變數")
         sys.exit(1)
 
-    print("開始執行全品項庫存檢查...")
-    for product in TARGET_PRODUCTS:
-        check_product_stock(product)
+    payload = {
+        "username": "丸久小山園補貨雷達",
+        "content": "@everyone 🍵 **【系統測試】丸久小山園補貨雷達測試通知！**",
+        "embeds": [
+            {
+                "title": "🍵 【測試通知】五十鈴 (Isuzu) 100g 罐裝",
+                "description": "這是一則系統測試訊息，確認您的 Discord Webhook 能夠正常接收推播與響鈴提醒！\n\n[點我前往丸久小山園官網](https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1)",
+                "color": 3066993,  # 翡翠綠
+                "footer": {"text": "丸久小山園監控系統 • 測試成功"},
+            }
+        ],
+    }
+
+    res = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+    if res.status_code in (200, 204):
+        print("✅ 測試訊息發送成功！請檢查您的 Discord 頻道。")
+    else:
+        print(f"❌ 測試訊息發送失敗，狀態碼: {res.status_code}")
 
 
 if __name__ == "__main__":
-    main()
+    send_test_notification()
