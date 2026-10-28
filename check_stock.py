@@ -6,17 +6,22 @@ from bs4 import BeautifulSoup
 # 您要監控的丸久小山園英文版官網商品清單
 TARGET_PRODUCTS = [
     {
-        "name": "五十鈴 (Isuzu)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",
+        "name": "青嵐 (Aoarashi)",
+        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/11a1040c1",
     },
     {
         "name": "又玄 (Yugen)",
         "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1171020c1",
     },
     {
-        "name": "青嵐 (Aoarashi)",
+        "name": "五十鈴 (Isuzu)",
         "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1191040c1",
     },
+    {
+        "name": "千木の白 (Chigi no Shiro)",
+        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",
+    },
+    
 ]
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
