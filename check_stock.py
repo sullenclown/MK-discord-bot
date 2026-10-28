@@ -3,7 +3,6 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-# 丸久小山園英文版官網商品監控清單
 TARGET_PRODUCTS = [
     {
         "name": "青嵐 (Aoarashi)",
@@ -26,7 +25,7 @@ TARGET_PRODUCTS = [
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 
-def check_product_stock(product):
+def get_stock_status(product):
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -40,37 +39,18 @@ def check_product_stock(product):
         response = requests.get(product["url"], headers=headers, timeout=10)
         response.raise_for_status()
     except Exception as e:
-        print(f"[{product['name']}] 網頁抓取失敗: {e}")
-        return
+        return f"❌ 抓取失敗 ({e})"
 
     soup = BeautifulSoup(response.text, "html.parser")
     page_text = soup.get_text().lower()
 
-    # 英文版庫存判斷邏輯
     cart_button = soup.find("button", class_=lambda x: x and "add" in x.lower())
     is_out_of_stock = "out of stock" in page_text or "sold out" in page_text
 
-    is_in_stock = (not is_out_of_stock) and (cart_button is not None)
-
-    if is_in_stock:
-        payload = {
-            "username": "丸久小山園補貨雷達",
-            "content": "@everyone 🍵 **丸久小山園補貨囉！**",
-            "embeds": [
-                {
-                    "title": f"【補貨通知】{product['name']}",
-                    "description": f"檢測到商品已開放購買，請速前往搶購！\n[點我前往商品頁面]({product['url']})",
-                    "color": 3066993,  # 翡翠綠
-                }
-            ],
-        }
-        res = requests.post(DISCORD_WEBHOOK_URL, json=payload)
-        if res.status_code in (200, 204):
-            print(f"[{product['name']}] 成功發送 Discord 補貨通知！")
-        else:
-            print(f"[{product['name']}] Discord 發送失敗: {res.status_code}")
+    if (not is_out_of_stock) and (cart_button is not None):
+        return "✅ **有現貨！** [點我購買](" + product["url"] + ")"
     else:
-        print(f"[{product['name']}] 目前仍無庫存 (Out of Stock)...")
+        return "❌ 缺貨中 (Out of Stock)"
 
 
 def main():
@@ -78,9 +58,45 @@ def main():
         print("錯誤：未設定 DISCORD_WEBHOOK_URL 變數")
         sys.exit(1)
 
+    # 判斷觸發來源：如果是手動按按鈕觸發 (workflow_dispatch)
+    is_manual_trigger = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+
+    results = []
+    has_any_stock = False
+
     print("開始執行全品項庫存檢查...")
     for product in TARGET_PRODUCTS:
-        check_product_stock(product)
+        status = get_stock_status(product)
+        results.append(f"• **{product['name']}**: {status}")
+        if "有現貨" in status:
+            has_any_stock = True
+
+    # 發送條件：
+    # 1. 只要有任何商品補貨 (自動定時發送)
+    # 2. 或者是由你手動點選按鈕觸發 (無論有無現貨都回報總覽)
+    if has_any_stock or is_manual_trigger:
+        content = (
+            "@everyone 🍵 **丸久小山園補貨囉！**"
+            if has_any_stock
+            else "🔍 **【手動庫存查詢結果】**"
+        )
+
+        embed = {
+            "title": "🍵 丸久小山園 庫存狀態總覽",
+            "description": "\n".join(results),
+            "color": 3066993 if has_any_stock else 3447003,  # 有貨綠色，無貨藍色
+        }
+
+        payload = {
+            "username": "丸久小山園補貨雷達",
+            "content": content,
+            "embeds": [embed],
+        }
+
+        requests.post(DISCORD_WEBHOOK_URL, json=payload)
+        print("已發送狀態至 Discord 頻道！")
+    else:
+        print("目前全品項均無庫存，未發送通知。")
 
 
 if __name__ == "__main__":
