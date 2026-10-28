@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 TARGET_PRODUCTS = [
     {
         "name": "五十鈴 (Isuzu)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",  # 請確認五十鈴正確網址
+        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",
     },
     {
         "name": "又玄 (Yugen)",
@@ -42,25 +42,21 @@ def check_product_stock(product):
     soup = BeautifulSoup(response.text, "html.parser")
     page_text = soup.get_text().lower()
 
-    # 英文版庫存判斷邏輯：
-    # 1. 尋找 Add to Cart 按鈕
+    # 英文版庫存判斷邏輯
     cart_button = soup.find("button", class_=lambda x: x and "add" in x.lower())
-    
-    # 2. 檢查頁面中是否含有 Out of Stock 或 Sold Out
     is_out_of_stock = "out of stock" in page_text or "sold out" in page_text
 
-    # 綜合判斷：只要沒有寫缺貨，且存在購物按鈕即代表有貨
     is_in_stock = (not is_out_of_stock) and (cart_button is not None)
 
     if is_in_stock:
         payload = {
             "username": "丸久小山園補貨雷達",
-            "content": "@everyone 🍵 **丸久小山園補貨囉！**",  # 補貨時自動 @everyone 響鈴
+            "content": "@everyone 🍵 **丸久小山園補貨囉！**",
             "embeds": [
                 {
                     "title": f"【補貨通知】{product['name']}",
                     "description": f"檢測到商品已開放購買，請速前往搶購！\n[點我前往商品頁面]({product['url']})",
-                    "color": 3066993,  # 翡翠綠
+                    "color": 3066993,
                 }
             ],
         }
@@ -81,3 +77,7 @@ def main():
     print("開始執行全品項庫存檢查...")
     for product in TARGET_PRODUCTS:
         check_product_stock(product)
+
+
+if __name__ == "__main__":
+    main()
