@@ -3,7 +3,6 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 從 Secrets 讀取總覽頁網址與 4 個商品連結
 CATALOG_URL = os.getenv("CATALOG_URL")
 TARGET_PRODUCTS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
@@ -13,6 +12,45 @@ TARGET_PRODUCTS = [
 ]
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+
+
+def check_item_stock_on_catalog(soup, item_url):
+    """針對帶有 SOLD OUT 圖片遮罩的總覽頁卡片進行深度比對"""
+    if not item_url:
+        return "❌ Secret Missing", False
+
+    # 提取網址尾端編號 (例如 11a1040c1)
+    url_path = item_url.rstrip("/").split("/")[-1]
+
+    # 1. 尋找指向該商品的連結 <a>
+    product_link = soup.find("a", href=lambda x: x and url_path in x)
+    if not product_link:
+        return "❌ Item Not Found", False
+
+    # 2. 向上層尋找包覆「圖片 + 品名 + 價格」的最完整卡片容器
+    # 優先尋找 <li>，若無則向上找 3 層 parent 以保證覆蓋圖片區塊
+    card = product_link.find_parent("li")
+    if not card:
+        card = product_link.parent.parent.parent
+
+    # 3. 抓取卡片內部所有文字與完整 HTML Code (小寫)
+    card_text = card.get_text().lower()
+    card_html = str(card).lower()
+
+    # 4. 嚴格比對缺貨特徵（只要出現 sold out 相關關鍵字即判定缺貨）
+    is_sold_out = (
+        "sold out" in card_text
+        or "soldout" in card_text
+        or "out of stock" in card_text
+        or "sold-out" in card_html
+        or "soldout" in card_html
+        or "out-of-stock" in card_html
+    )
+
+    if is_sold_out:
+        return "❌ Out of Stock", False
+    else:
+        return f"✅ **IN STOCK** - [Direct Link]({item_url})", True
 
 
 def main():
@@ -29,7 +67,6 @@ def main():
         "Accept-Language": "en-US,en;q=0.9",
     }
 
-    # 單次請求總覽頁面
     try:
         response = requests.get(CATALOG_URL, headers=headers, timeout=10)
         response.raise_for_status()
@@ -44,35 +81,12 @@ def main():
     results = []
     has_any_stock = False
 
-    print("Starting catalog status check...")
+    print("Starting catalog precision check...")
     for product in TARGET_PRODUCTS:
-        item_url = product["url"]
-        if not item_url:
-            results.append(f"• **{product['name']}**: ❌ Secret Missing")
-            continue
-
-        # 提取商品 URL 的尾端編號做卡片定位
-        url_path = item_url.rstrip("/").split("/")[-1]
-        
-        # 尋找包含該網址路徑的商品連結
-        product_link = soup.find("a", href=lambda x: x and url_path in x)
-        
-        if not product_link:
-            status = "❌ Item Not Found on Catalog"
-        else:
-            # 找到卡片外層容器
-            card = product_link.find_parent(["div", "li", "article"]) or product_link
-            card_text = card.get_text().lower()
-            card_html = str(card).lower()
-
-            # 檢查卡片 HTML 或文字中是否含有 sold out 標示
-            if "sold out" in card_text or "sold-out" in card_html:
-                status = "❌ Out of Stock"
-            else:
-                status = f"✅ **IN STOCK** - [Direct Link]({item_url})"
-                has_any_stock = True
-
+        status, is_in_stock = check_item_stock_on_catalog(soup, product["url"])
         results.append(f"• **{product['name']}**: {status}")
+        if is_in_stock:
+            has_any_stock = True
 
     # 發送通知條件
     if has_any_stock or is_manual_trigger:
