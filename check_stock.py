@@ -3,7 +3,7 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 從環境變數 (GitHub Secrets) 讀取 4 個商品的網址，程式碼中 100% 不留任何網址痕跡
+# 從 GitHub Secrets 讀取 4 個商品的網址（程式碼中 100% 找不到任何網址與品牌痕跡）
 TARGET_PRODUCTS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item B", "url": os.getenv("ITEM_B_URL")},
@@ -11,15 +11,13 @@ TARGET_PRODUCTS = [
     {"name": "Item D", "url": os.getenv("ITEM_D_URL")},
 ]
 
-# 2. 從環境變數讀取 Discord Webhook 網址
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 
 def get_stock_status(product):
-    """檢查單一項目的庫存狀態"""
-    # 若該 Secrets 網址未設定或讀取失敗，進行防錯回報
+    """檢查單一項目的頁面庫存狀態"""
     if not product["url"]:
-        return "❌ 網址未設定 (Secret Missing)"
+        return "❌ Secret Missing"
 
     headers = {
         "User-Agent": (
@@ -34,15 +32,15 @@ def get_stock_status(product):
         response = requests.get(product["url"], headers=headers, timeout=10)
         response.raise_for_status()
     except Exception as e:
-        return f"❌ 抓取失敗 ({e})"
+        return f"❌ Request Failed ({e})"
 
     soup = BeautifulSoup(response.text, "html.parser")
     page_text = soup.get_text().lower()
 
-    # 尋找 class 包含 "add" 的購物車按鈕
+    # 搜尋 class 包含 "add" 的購物車按鈕
     cart_button = soup.find("button", class_=lambda x: x and "add" in x.lower())
-    
-    # 檢查頁面是否包含缺貨關鍵字
+
+    # 檢查頁面是否包含缺貨關鍵字（包含 unavailable，確保覆蓋率 100%）
     is_out_of_stock = (
         "out of stock" in page_text
         or "sold out" in page_text
@@ -58,25 +56,23 @@ def get_stock_status(product):
 
 def main():
     if not DISCORD_WEBHOOK_URL:
-        print("錯誤：未設定 DISCORD_WEBHOOK_URL 環境變數")
+        print("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
         sys.exit(1)
 
-    # 判斷觸發來源：如果是手動按按鈕觸發 (workflow_dispatch)
+    # 判斷觸發來源：手動點擊 (workflow_dispatch) vs 自動排程
     is_manual_trigger = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
 
     results = []
     has_any_stock = False
 
-    print("開始執行項目狀態檢查...")
+    print("Starting status check...")
     for product in TARGET_PRODUCTS:
         status = get_stock_status(product)
         results.append(f"• **{product['name']}**: {status}")
         if "IN STOCK" in status:
             has_any_stock = True
 
-    # 發送條件：
-    # 1. 只要有任何商品補貨 (自動定時發送)
-    # 2. 或者是由手動點選按鈕觸發 (無論有無現貨都回報總覽卡片)
+    # 發送條件：1. 任意商品補貨 2. 手動觸發查詢
     if has_any_stock or is_manual_trigger:
         content = (
             "@everyone 🔔 **Item Availability Alert!**"
@@ -87,11 +83,11 @@ def main():
         embed = {
             "title": "📊 Status Overview Report",
             "description": "\n".join(results),
-            "color": 3066993 if has_any_stock else 3447003,  # 有貨綠色 (3066993)，無貨藍色 (3447003)
+            "color": 3066993 if has_any_stock else 3447003,  # 補貨綠色，查詢藍色
         }
 
         payload = {
-            "username": "Status Bot",  # 去識別化的發送者名稱
+            "username": "Status Bot",
             "content": content,
             "embeds": [embed],
         }
@@ -99,11 +95,11 @@ def main():
         try:
             res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
             res.raise_for_status()
-            print("已成功發送狀態至 Discord 頻道！")
+            print("Discord notification delivered successfully.")
         except Exception as e:
-            print(f"發送至 Discord 失敗: {e}")
+            print(f"Failed to deliver Discord notification: {e}")
     else:
-        print("目前全品項均無庫存，未發送通知。")
+        print("All items currently out of stock. Notification skipped.")
 
 
 if __name__ == "__main__":
