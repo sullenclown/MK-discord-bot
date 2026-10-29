@@ -76,19 +76,19 @@ def main():
     # 2. 或者是由你手動點選按鈕觸發 (無論有無現貨都回報總覽)
     if has_any_stock or is_manual_trigger:
         content = (
-            "@everyone 🍵 **丸久小山園補貨囉！**"
+            "@everyone 🍵 **MK補貨囉！**"
             if has_any_stock
             else "🔍 **【手動庫存查詢結果】**"
         )
 
         embed = {
-            "title": "🍵 丸久小山園 庫存狀態總覽",
+            "title": "🍵 MK 庫存狀態總覽",
             "description": "\n".join(results),
             "color": 3066993 if has_any_stock else 3447003,  # 有貨綠色，無貨藍色
         }
 
         payload = {
-            "username": "丸久小山園補貨雷達",
+            "username": "MK補貨雷達",
             "content": content,
             "embeds": [embed],
         }
