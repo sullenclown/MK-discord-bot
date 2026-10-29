@@ -3,29 +3,24 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
+# 1. 從環境變數 (GitHub Secrets) 讀取 4 個商品的網址，程式碼中 100% 不留任何網址痕跡
 TARGET_PRODUCTS = [
-    {
-        "name": "青嵐 (Aoarashi)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/11a1040c1",
-    },
-    {
-        "name": "又玄 (Yugen)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1171020c1",
-    },
-    {
-        "name": "五十鈴 (Isuzu)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1191040c1",
-    },
-    {
-        "name": "千木の白 (Chigi no Shiro)",
-        "url": "https://www.marukyu-koyamaen.co.jp/english/shop/products/1181040c1",
-    },
+    {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
+    {"name": "Item B", "url": os.getenv("ITEM_B_URL")},
+    {"name": "Item C", "url": os.getenv("ITEM_C_URL")},
+    {"name": "Item D", "url": os.getenv("ITEM_D_URL")},
 ]
 
+# 2. 從環境變數讀取 Discord Webhook 網址
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 
 def get_stock_status(product):
+    """檢查單一項目的庫存狀態"""
+    # 若該 Secrets 網址未設定或讀取失敗，進行防錯回報
+    if not product["url"]:
+        return "❌ 網址未設定 (Secret Missing)"
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -44,18 +39,26 @@ def get_stock_status(product):
     soup = BeautifulSoup(response.text, "html.parser")
     page_text = soup.get_text().lower()
 
+    # 尋找 class 包含 "add" 的購物車按鈕
     cart_button = soup.find("button", class_=lambda x: x and "add" in x.lower())
-    is_out_of_stock = "out of stock" in page_text or "sold out" in page_text
+    
+    # 檢查頁面是否包含缺貨關鍵字
+    is_out_of_stock = (
+        "out of stock" in page_text
+        or "sold out" in page_text
+        or "unavailable" in page_text
+    )
 
+    # 判定邏輯：必須「無缺貨關鍵字」且「找到購物車按鈕」
     if (not is_out_of_stock) and (cart_button is not None):
-        return "✅ **有現貨！** [點我購買](" + product["url"] + ")"
+        return "✅ **IN STOCK** - [Direct Link](" + product["url"] + ")"
     else:
-        return "❌ 缺貨中 (Out of Stock)"
+        return "❌ Out of Stock"
 
 
 def main():
     if not DISCORD_WEBHOOK_URL:
-        print("錯誤：未設定 DISCORD_WEBHOOK_URL 變數")
+        print("錯誤：未設定 DISCORD_WEBHOOK_URL 環境變數")
         sys.exit(1)
 
     # 判斷觸發來源：如果是手動按按鈕觸發 (workflow_dispatch)
@@ -64,37 +67,41 @@ def main():
     results = []
     has_any_stock = False
 
-    print("開始執行全品項庫存檢查...")
+    print("開始執行項目狀態檢查...")
     for product in TARGET_PRODUCTS:
         status = get_stock_status(product)
         results.append(f"• **{product['name']}**: {status}")
-        if "有現貨" in status:
+        if "IN STOCK" in status:
             has_any_stock = True
 
     # 發送條件：
     # 1. 只要有任何商品補貨 (自動定時發送)
-    # 2. 或者是由你手動點選按鈕觸發 (無論有無現貨都回報總覽)
+    # 2. 或者是由手動點選按鈕觸發 (無論有無現貨都回報總覽卡片)
     if has_any_stock or is_manual_trigger:
         content = (
-            "@everyone 🍵 **MK補貨囉！**"
+            "@everyone 🔔 **Item Availability Alert!**"
             if has_any_stock
-            else "🔍 **【手動庫存查詢結果】**"
+            else "🔍 **【Manual Status Report】**"
         )
 
         embed = {
-            "title": "🍵 MK 庫存狀態總覽",
+            "title": "📊 Status Overview Report",
             "description": "\n".join(results),
-            "color": 3066993 if has_any_stock else 3447003,  # 有貨綠色，無貨藍色
+            "color": 3066993 if has_any_stock else 3447003,  # 有貨綠色 (3066993)，無貨藍色 (3447003)
         }
 
         payload = {
-            "username": "MK補貨雷達",
+            "username": "Status Bot",  # 去識別化的發送者名稱
             "content": content,
             "embeds": [embed],
         }
 
-        requests.post(DISCORD_WEBHOOK_URL, json=payload)
-        print("已發送狀態至 Discord 頻道！")
+        try:
+            res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+            res.raise_for_status()
+            print("已成功發送狀態至 Discord 頻道！")
+        except Exception as e:
+            print(f"發送至 Discord 失敗: {e}")
     else:
         print("目前全品項均無庫存，未發送通知。")
 
