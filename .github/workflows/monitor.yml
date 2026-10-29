@@ -2,9 +2,9 @@ name: Scheduled Status Checker
 
 on:
   schedule:
-    # 台灣時間週一至週五 07:00 ~ 17:00 每 5 分鐘執行一次 (UTC 23:00~08:00)
+    # 台灣時間週一至週五 07:00 ~ 17:00 每 5 分鐘執行一次 (對應 UTC 23:00 ~ 08:00)
     - cron: '*/5 23,0-8 * * 1-5'
-  workflow_dispatch:
+  workflow_dispatch: # 支援在 GitHub Actions 頁面手動點擊 Run workflow 測試
 
 jobs:
   check-status:
@@ -27,6 +27,7 @@ jobs:
       - name: Run status check script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CATALOG_URL: ${{ secrets.CATALOG_URL }}
           ITEM_A_URL: ${{ secrets.ITEM_A_URL }}
           ITEM_B_URL: ${{ secrets.ITEM_B_URL }}
           ITEM_C_URL: ${{ secrets.ITEM_C_URL }}
