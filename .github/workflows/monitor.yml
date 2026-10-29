@@ -2,9 +2,9 @@ name: Scheduled Status Checker
 
 on:
   schedule:
-    # 台灣時間週一至週五 07:00 ~ 17:00，每 5 分鐘執行一次 (對應 UTC 23:00~08:00)
+    # 台灣時間週一至週五 07:00 ~ 17:00 每 5 分鐘執行一次 (UTC 23:00~08:00)
     - cron: '*/5 23,0-8 * * 1-5'
-  workflow_dispatch: # 支援在 GitHub Actions 頁面手動點擊 Run workflow
+  workflow_dispatch:
 
 jobs:
   check-status:
