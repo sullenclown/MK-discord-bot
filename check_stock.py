@@ -3,7 +3,7 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-CATALOG_URL = os.getenv("CATALOG_URL")
+# 從 GitHub Secrets 讀取 4 個商品的獨立頁面網址
 TARGET_PRODUCTS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item B", "url": os.getenv("ITEM_B_URL")},
@@ -13,50 +13,14 @@ TARGET_PRODUCTS = [
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
+# 官網標準的缺貨提示字串（轉小寫）
+OUT_OF_STOCK_TEXT = "this product is currently out of stock and unavailable."
 
-def check_item_stock_on_catalog(soup, item_url):
-    """針對帶有 SOLD OUT 圖片遮罩的總覽頁卡片進行深度比對"""
-    if not item_url:
+
+def check_product_page_stock(product_url):
+    """檢查商品獨立頁面是否包含明確的缺貨警語"""
+    if not product_url:
         return "❌ Secret Missing", False
-
-    # 提取網址尾端編號 (例如 11a1040c1)
-    url_path = item_url.rstrip("/").split("/")[-1]
-
-    # 1. 尋找指向該商品的連結 <a>
-    product_link = soup.find("a", href=lambda x: x and url_path in x)
-    if not product_link:
-        return "❌ Item Not Found", False
-
-    # 2. 向上層尋找包覆「圖片 + 品名 + 價格」的最完整卡片容器
-    # 優先尋找 <li>，若無則向上找 3 層 parent 以保證覆蓋圖片區塊
-    card = product_link.find_parent("li")
-    if not card:
-        card = product_link.parent.parent.parent
-
-    # 3. 抓取卡片內部所有文字與完整 HTML Code (小寫)
-    card_text = card.get_text().lower()
-    card_html = str(card).lower()
-
-    # 4. 嚴格比對缺貨特徵（只要出現 sold out 相關關鍵字即判定缺貨）
-    is_sold_out = (
-        "sold out" in card_text
-        or "soldout" in card_text
-        or "out of stock" in card_text
-        or "sold-out" in card_html
-        or "soldout" in card_html
-        or "out-of-stock" in card_html
-    )
-
-    if is_sold_out:
-        return "❌ Out of Stock", False
-    else:
-        return f"✅ **IN STOCK** - [Direct Link]({item_url})", True
-
-
-def main():
-    if not DISCORD_WEBHOOK_URL or not CATALOG_URL:
-        print("Error: Required environment variables (DISCORD_WEBHOOK_URL / CATALOG_URL) are missing.")
-        sys.exit(1)
 
     headers = {
         "User-Agent": (
@@ -68,27 +32,39 @@ def main():
     }
 
     try:
-        response = requests.get(CATALOG_URL, headers=headers, timeout=10)
+        response = requests.get(product_url, headers=headers, timeout=10)
         response.raise_for_status()
-        catalog_html = response.text
     except Exception as e:
-        print(f"Failed to fetch catalog page: {e}")
+        return f"❌ Request Failed ({e})", False
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    page_text = soup.get_text().lower()
+
+    # 反向判定邏輯：只要頁面『完全沒有』出現這段缺貨警語，即代表有貨！
+    if OUT_OF_STOCK_TEXT not in page_text:
+        return f"✅ **IN STOCK** - [Direct Link]({product_url})", True
+    else:
+        return "❌ Out of Stock", False
+
+
+def main():
+    if not DISCORD_WEBHOOK_URL:
+        print("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
         sys.exit(1)
 
-    soup = BeautifulSoup(catalog_html, "html.parser")
     is_manual_trigger = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
 
     results = []
     has_any_stock = False
 
-    print("Starting catalog precision check...")
+    print("Starting inverted text precision check...")
     for product in TARGET_PRODUCTS:
-        status, is_in_stock = check_item_stock_on_catalog(soup, product["url"])
+        status, is_in_stock = check_product_page_stock(product["url"])
         results.append(f"• **{product['name']}**: {status}")
         if is_in_stock:
             has_any_stock = True
 
-    # 發送通知條件
+    # 發送通知條件：有貨發送通知，或手動點擊觸發查詢
     if has_any_stock or is_manual_trigger:
         content = (
             "@everyone 🔔 **Item Availability Alert!**"
@@ -115,7 +91,7 @@ def main():
         except Exception as e:
             print(f"Failed to deliver Discord notification: {e}")
     else:
-        print("All catalog items currently out of stock. Notification skipped.")
+        print("All items currently out of stock. Notification skipped.")
 
 
 if __name__ == "__main__":
