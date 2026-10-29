@@ -1,19 +1,20 @@
-name: Koyamaen Discord Monitor
+name: Scheduled Status Checker
 
 on:
   schedule:
-    # UTC 時間 23:00 至 09:00（對應台灣時間週一至週五 07:00 ~ 17:00），每 5 分鐘檢查一次
+    # 台灣時間週一至週五 07:00 ~ 17:00，每 5 分鐘執行一次 (對應 UTC 23:00~08:00)
     - cron: '*/5 23,0-8 * * 1-5'
-  workflow_dispatch: # 保留手動點擊 Run workflow 功能
+  workflow_dispatch: # 支援在 GitHub Actions 頁面手動點擊 Run workflow
 
 jobs:
-  monitor:
+  check-status:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -23,7 +24,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      - name: Run stock check
+      - name: Run status check script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ITEM_A_URL: ${{ secrets.ITEM_A_URL }}
+          ITEM_B_URL: ${{ secrets.ITEM_B_URL }}
+          ITEM_C_URL: ${{ secrets.ITEM_C_URL }}
+          ITEM_D_URL: ${{ secrets.ITEM_D_URL }}
         run: python check_stock.py
