@@ -11,9 +11,9 @@ EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "workflow_dispatch")
 # 4 個品項設定
 ITEMS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
-    {"name": "Item B", "url": os.getenv("ITEM_B_URL")},
-    {"name": "Item C", "url": os.getenv("ITEM_C_URL")},
-    {"name": "Item D", "url": os.getenv("ITEM_D_URL")},
+    {"name": "Item Y", "url": os.getenv("ITEM_B_URL")},
+    {"name": "Item I", "url": os.getenv("ITEM_C_URL")},
+    {"name": "Item C", "url": os.getenv("ITEM_D_URL")},
 ]
 
 # 檢查必要的 Secret 是否存在
