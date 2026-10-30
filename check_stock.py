@@ -95,7 +95,7 @@ payload = {
 }
 
 # 僅有貨時發送 @everyone 通知
-payload["content"] = "@everyone 有商品補貨囉！" if has_in_stock else ""
+payload["content"] = "@everyone 🔔MK補貨囉！" if has_in_stock else ""
 
 response = requests.post(WEBHOOK_URL, json=payload)
 if response.status_code in [200, 204]:
