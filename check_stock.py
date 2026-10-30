@@ -2,9 +2,8 @@ import os
 import datetime
 import requests
 
-# 1. 讀取 Secrets 與環境變數（100% 去識別化）
+# 1. 讀取 Secrets 與環境變數（全數去識別化）
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-ACCOUNT_URL = os.getenv("ACCOUNT_URL")
 USER_COOKIE = os.getenv("USER_COOKIE", "")
 TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
 
@@ -21,6 +20,7 @@ if not WEBHOOK_URL:
     exit(1)
 
 out_of_stock_text = "this product is currently out of stock and unavailable."
+must_login_text = "you must register and login to shop."
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -29,20 +29,7 @@ headers = {
 if USER_COOKIE:
     headers["Cookie"] = USER_COOKIE
 
-# 🔍 步驟 1：先檢查是否登入 (檢查 ACCOUNT_URL 頁面是否有 log out)
-is_logged_in = False
-if USER_COOKIE and ACCOUNT_URL:
-    try:
-        acc_resp = requests.get(ACCOUNT_URL, headers=headers, timeout=10)
-        if acc_resp.status_code == 200 and "log out" in acc_resp.text.lower():
-            is_logged_in = True
-            print("✅ Login Status: LOGGED IN")
-        else:
-            print("⚠️ Login Status: NOT LOGGED IN / COOKIE EXPIRED")
-    except Exception as e:
-        print(f"⚠️ Account Check Exception: {e}")
-
-# 🔍 步驟 2：進行商品頁面檢查
+# 🔍 步驟 2：直接檢測各商品頁面狀態
 results = []
 has_any_alert = False
 has_taiwan_stock = False
@@ -63,33 +50,32 @@ for item in ITEMS:
         if resp.status_code == 200:
             page_text = resp.text.lower()
             
-            # --- 情況 A：已登入狀態 ---
-            if is_logged_in:
-                has_add_to_cart = "add to cart" in page_text
-                
-                print(f"[{name}] LoggedIn: True | AddToCart: {has_add_to_cart}")
-                
+            # 關鍵字檢查
+            has_must_login_msg = must_login_text in page_text
+            is_out_of_stock = out_of_stock_text in page_text
+            has_add_to_cart = "add to cart" in page_text
+            
+            print(f"[{name}] MustLogin: {has_must_login_msg} | OutOfStockMsg: {is_out_of_stock} | AddToCart: {has_add_to_cart}")
+            
+            # --- 情況 A：未登入 / Cookie 失效 ---
+            if has_must_login_msg:
+                if is_out_of_stock:
+                    # 未登入但頁面明示缺貨 -> 確定缺貨
+                    results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
+                else:
+                    # 未登入且非缺貨 -> 提醒 Cookie 失效
+                    results.append(f"⚠️ **{name}** {link_str}: Cookie Expired / Not Logged In")
+                    has_any_alert = True
+            
+            # --- 情況 B：已登入狀態 ---
+            else:
                 if has_add_to_cart:
-                    # 已登入且有 Add to Cart -> 肯定可以寄台灣購買
+                    # 已登入且包含 Add to Cart -> 有貨可購買
                     results.append(f"✅ **{name}** {link_str}: **IN STOCK (Taiwan Available)**")
                     has_taiwan_stock = True
                     has_any_alert = True
                 else:
                     results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
-            
-            # --- 情況 B：未登入狀態 ---
-            else:
-                is_out_of_stock = out_of_stock_text in page_text
-                
-                print(f"[{name}] LoggedIn: False | OutOfStockText: {is_out_of_stock}")
-                
-                if is_out_of_stock:
-                    # 未登入但頁面明示缺貨 -> 精準判定缺貨
-                    results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
-                else:
-                    # 未登入且不是缺貨警語 -> 提示 Cookie 到期無法確認購買 state
-                    results.append(f"⚠️ **{name}** {link_str}: Cookie Expired / Not Logged In")
-                    has_any_alert = True
         else:
             results.append(f"⚠️ **{name}** {link_str}: HTTP {resp.status_code}")
     except Exception as e:
