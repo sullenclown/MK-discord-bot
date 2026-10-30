@@ -1,98 +1,101 @@
 import os
-import sys
+import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# 從 GitHub Secrets 讀取 4 個商品的獨立頁面網址
-TARGET_PRODUCTS = [
+# 1. 讀取 Secrets 與環境變數
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
+EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+
+ITEMS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item B", "url": os.getenv("ITEM_B_URL")},
     {"name": "Item C", "url": os.getenv("ITEM_C_URL")},
     {"name": "Item D", "url": os.getenv("ITEM_D_URL")},
+    {"name": "Item E", "url": os.getenv("ITEM_E_URL")},
 ]
 
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+# 檢查必要的 Secret 是否存在
+if not WEBHOOK_URL:
+    print("❌ Error: DISCORD_WEBHOOK_URL is missing!")
+    exit(1)
 
-# 官網標準的缺貨提示字串（轉小寫）
-OUT_OF_STOCK_TEXT = "this product is currently out of stock and unavailable."
+# 2. 爬蟲核心判定邏輯（反向判斷）
+out_of_stock_text = "this product is currently out of stock and unavailable."
+results = []
+has_in_stock = False
 
-
-def check_product_page_stock(product_url):
-    """檢查商品獨立頁面是否包含明確的缺貨警語"""
-    if not product_url:
-        return "❌ Secret Missing", False
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+for item in ITEMS:
+    url = item["url"]
+    name = item["name"]
+    
+    if not url:
+        results.append(f"❓ **{name}**: Secret URL Missing")
+        continue
 
     try:
-        response = requests.get(product_url, headers=headers, timeout=10)
-        response.raise_for_status()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            page_text = resp.text.lower()
+            if out_of_stock_text in page_text:
+                results.append(f"❌ **{name}**: OUT OF STOCK")
+            else:
+                results.append(f"✅ **{name}**: **IN STOCK**")
+                has_in_stock = True
+        else:
+            results.append(f"⚠️ **{name}**: HTTP {resp.status_code}")
     except Exception as e:
-        return f"❌ Request Failed ({e})", False
+        results.append(f"⚠️ **{name}**: Request Failed")
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    page_text = soup.get_text().lower()
+# 3. 組合 Discord Embed 卡片
+now_utc = datetime.datetime.now(datetime.timezone.utc)
+taipei_tz = datetime.timezone(datetime.timedelta(hours=8))
+now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-    # 反向判定邏輯：只要頁面『完全沒有』出現這段缺貨警語，即代表有貨！
-    if OUT_OF_STOCK_TEXT not in page_text:
-        return f"✅ **IN STOCK** - [Direct Link]({product_url})", True
-    else:
-        return "❌ Out of Stock", False
+# 設定卡片顏色與標題
+if has_in_stock:
+    color = 3066993  # 綠色
+    title = "🚨 【IN STOCK ALERT】Marukyu Koyamaen"
+else:
+    color = 10038562  # 紅色 / 灰色
+    title = f"🔍 【Status Report】Marukyu Koyamaen"
 
-
-def main():
-    if not DISCORD_WEBHOOK_URL:
-        print("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
-        sys.exit(1)
-
-    is_manual_trigger = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
-
-    results = []
-    has_any_stock = False
-
-    print("Starting inverted text precision check...")
-    for product in TARGET_PRODUCTS:
-        status, is_in_stock = check_product_page_stock(product["url"])
-        results.append(f"• **{product['name']}**: {status}")
-        if is_in_stock:
-            has_any_stock = True
-
-    # 發送通知條件：有貨發送通知，或手動點擊觸發查詢
-    if has_any_stock or is_manual_trigger:
-        content = (
-            "@everyone 🔔 **Item Availability Alert!**"
-            if has_any_stock
-            else "🔍 **【Manual Status Report】**"
-        )
-
-        embed = {
-            "title": "📊 Status Overview Report",
-            "description": "\n".join(results),
-            "color": 3066993 if has_any_stock else 3447003,
+embed = {
+    "title": title,
+    "description": "\n".join(results),
+    "color": color,
+    "fields": [
+        {
+            "name": "Trigger Source",
+            "value": f"`{TRIGGER_SOURCE}`",
+            "inline": True
+        },
+        {
+            "name": "Check Time",
+            "value": f"`{now_taipei} (UTC+8)`",
+            "inline": True
         }
+    ],
+    "footer": {
+        "text": f"MK Stock Monitor | Triggered via {TRIGGER_SOURCE}"
+    }
+}
 
-        payload = {
-            "username": "Status Bot",
-            "content": content,
-            "embeds": [embed],
-        }
+payload = {
+    "username": "Koyamaen Monitor",
+    "embeds": [embed]
+}
 
-        try:
-            res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
-            res.raise_for_status()
-            print("Discord notification delivered successfully.")
-        except Exception as e:
-            print(f"Failed to deliver Discord notification: {e}")
-    else:
-        print("All items currently out of stock. Notification skipped.")
+# 僅有貨或為手動/測試觸發時發送 Discord 通知
+payload["content"] = "@everyone 有商品補貨囉！" if has_in_stock else ""
 
-
-if __name__ == "__main__":
-    main()
+response = requests.post(WEBHOOK_URL, json=payload)
+if response.status_code in [200, 204]:
+    print("✅ Discord notification sent successfully!")
+else:
+    print(f"❌ Failed to send Discord notification: {response.status_code}")
