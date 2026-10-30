@@ -8,12 +8,12 @@ WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
 EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "workflow_dispatch")
 
+# 4 個品項設定
 ITEMS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item B", "url": os.getenv("ITEM_B_URL")},
     {"name": "Item C", "url": os.getenv("ITEM_C_URL")},
     {"name": "Item D", "url": os.getenv("ITEM_D_URL")},
-    {"name": "Item E", "url": os.getenv("ITEM_E_URL")},
 ]
 
 # 檢查必要的 Secret 是否存在
@@ -52,18 +52,18 @@ for item in ITEMS:
     except Exception as e:
         results.append(f"⚠️ **{name}**: Request Failed")
 
-# 3. 組合 Discord Embed 卡片
+# 3. 組合 Discord Embed 卡片（去識別化）
 now_utc = datetime.datetime.now(datetime.timezone.utc)
 taipei_tz = datetime.timezone(datetime.timedelta(hours=8))
 now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-# 設定卡片顏色與標題
+# 設定卡片顏色與通用標題
 if has_in_stock:
     color = 3066993  # 綠色
-    title = "🚨 【IN STOCK ALERT】Marukyu Koyamaen"
+    title = "🚨 【IN STOCK ALERT】Inventory Monitor"
 else:
-    color = 10038562  # 紅色 / 灰色
-    title = f"🔍 【Status Report】Marukyu Koyamaen"
+    color = 10038562  # 灰色 / 紅色
+    title = f"🔍 【Status Report】Inventory Monitor"
 
 embed = {
     "title": title,
@@ -82,16 +82,16 @@ embed = {
         }
     ],
     "footer": {
-        "text": f"MK Stock Monitor | Triggered via {TRIGGER_SOURCE}"
+        "text": f"Stock Monitor | Triggered via {TRIGGER_SOURCE}"
     }
 }
 
 payload = {
-    "username": "Koyamaen Monitor",
+    "username": "Stock Monitor Bot",
     "embeds": [embed]
 }
 
-# 僅有貨或為手動/測試觸發時發送 Discord 通知
+# 僅有貨時發送 @everyone 通知
 payload["content"] = "@everyone 有商品補貨囉！" if has_in_stock else ""
 
 response = requests.post(WEBHOOK_URL, json=payload)
