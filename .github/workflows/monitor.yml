@@ -28,6 +28,7 @@ jobs:
       - name: Run Stock Check
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ACCOUNT_URL: ${{ secrets.ACCOUNT_URL }}
           ITEM_A_URL: ${{ secrets.ITEM_A_URL }}
           ITEM_I_URL: ${{ secrets.ITEM_I_URL }}
           ITEM_C_URL: ${{ secrets.ITEM_C_URL }}
