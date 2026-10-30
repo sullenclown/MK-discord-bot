@@ -34,6 +34,9 @@ for item in ITEMS:
         results.append(f"❓ **{name}**: Secret URL Missing")
         continue
 
+    # 將商品名稱包裝成 Markdown 超連結 [Item A](URL)
+    item_link = f"[{name}]({url})"
+
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -43,14 +46,14 @@ for item in ITEMS:
         if resp.status_code == 200:
             page_text = resp.text.lower()
             if out_of_stock_text in page_text:
-                results.append(f"❌ **{name}**: OUT OF STOCK")
+                results.append(f"❌ **{item_link}**: OUT OF STOCK")
             else:
-                results.append(f"✅ **{name}**: **IN STOCK**")
+                results.append(f"✅ **{item_link}**: **IN STOCK**")
                 has_in_stock = True
         else:
-            results.append(f"⚠️ **{name}**: HTTP {resp.status_code}")
+            results.append(f"⚠️ **{item_link}**: HTTP {resp.status_code}")
     except Exception as e:
-        results.append(f"⚠️ **{name}**: Request Failed")
+        results.append(f"⚠️ **{item_link}**: Request Failed")
 
 # 3. 組合 Discord Embed 卡片（去識別化）
 now_utc = datetime.datetime.now(datetime.timezone.utc)
