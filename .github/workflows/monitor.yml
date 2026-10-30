@@ -29,9 +29,9 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           ITEM_A_URL: ${{ secrets.ITEM_A_URL }}
-          ITEM_B_URL: ${{ secrets.ITEM_B_URL }}
+          ITEM_I_URL: ${{ secrets.ITEM_I_URL }}
           ITEM_C_URL: ${{ secrets.ITEM_C_URL }}
-          ITEM_D_URL: ${{ secrets.ITEM_D_URL }}
+          ITEM_Y_URL: ${{ secrets.ITEM_Y_URL }}
           ITEM_W_URL: ${{ secrets.ITEM_W_URL }}
           USER_COOKIE: ${{ secrets.USER_COOKIE }}
           TRIGGER_SOURCE: ${{ inputs.trigger_source || 'cron-job.org' }}
