@@ -7,9 +7,6 @@ on:
         description: 'Trigger Source'
         required: false
         default: 'GitHub UI (Manual)'
-  # 原內建排程已註解，改由 cron-job.org 秒級準點觸發
-  # schedule:
-  #   - cron: '*/5 23-23,0-9 * * 1-5'
 
 jobs:
   check-status:
