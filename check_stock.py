@@ -1,7 +1,6 @@
 import os
 import datetime
 import requests
-from bs4 import BeautifulSoup
 
 # 1. 讀取 Secrets 與環境變數（100% 去識別化）
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
@@ -9,7 +8,6 @@ ACCOUNT_URL = os.getenv("ACCOUNT_URL")
 USER_COOKIE = os.getenv("USER_COOKIE", "")
 TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
 
-# 5 個品項設定（完全對應個別的 Secret 名稱）
 ITEMS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item I", "url": os.getenv("ITEM_I_URL")},
@@ -22,6 +20,8 @@ if not WEBHOOK_URL:
     print("❌ Error: DISCORD_WEBHOOK_URL is missing!")
     exit(1)
 
+out_of_stock_text = "this product is currently out of stock and unavailable."
+
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
@@ -29,20 +29,20 @@ headers = {
 if USER_COOKIE:
     headers["Cookie"] = USER_COOKIE
 
-# 🔍 步驟 1：優先透過 Secrets 中的 ACCOUNT_URL 驗證登入狀態
+# 🔍 步驟 1：先檢查是否登入 (檢查 ACCOUNT_URL 頁面是否有 log out)
 is_logged_in = False
 if USER_COOKIE and ACCOUNT_URL:
     try:
         acc_resp = requests.get(ACCOUNT_URL, headers=headers, timeout=10)
         if acc_resp.status_code == 200 and "log out" in acc_resp.text.lower():
             is_logged_in = True
-            print("✅ Login Verification: SUCCESS (LOG OUT found on account page)")
+            print("✅ Login Status: LOGGED IN")
         else:
-            print("⚠️ Login Verification: FAILED (LOG OUT not found or Cookie expired)")
+            print("⚠️ Login Status: NOT LOGGED IN / COOKIE EXPIRED")
     except Exception as e:
-        print(f"⚠️ Account Check Failed: {e}")
+        print(f"⚠️ Account Check Exception: {e}")
 
-# 🔍 步驟 2：進行商品庫存與寄送區域檢測
+# 🔍 步驟 2：進行商品頁面檢查
 results = []
 has_any_alert = False
 has_taiwan_stock = False
@@ -62,48 +62,53 @@ for item in ITEMS:
         
         if resp.status_code == 200:
             page_text = resp.text.lower()
-            soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # 正向尋找是否有真實可購買的 Add to Cart 按鈕或元素
-            cart_elements = soup.select(".single_add_to_cart_button, button.single_add_to_cart_button, input[name='add-to-cart']")
-            has_add_to_cart = len(cart_elements) > 0 or ("add to cart" in page_text and "out of stock" not in page_text)
-            
-            # 檢查運費選單是否有 Taiwan
-            has_taiwan_option = "taiwan" in page_text
-            
-            print(f"[{name}] AddToCart: {has_add_to_cart} | TaiwanOpt: {has_taiwan_option}")
-            
-            # 狀態判定
-            if not is_logged_in and USER_COOKIE:
-                results.append(f"⚠️ **{name}** {link_str}: Cookie Expired / Not Logged In")
-            elif has_add_to_cart:
-                has_any_alert = True
-                if has_taiwan_option:
+            # --- 情況 A：已登入狀態 ---
+            if is_logged_in:
+                has_add_to_cart = "add to cart" in page_text
+                
+                print(f"[{name}] LoggedIn: True | AddToCart: {has_add_to_cart}")
+                
+                if has_add_to_cart:
+                    # 已登入且有 Add to Cart -> 肯定可以寄台灣購買
                     results.append(f"✅ **{name}** {link_str}: **IN STOCK (Taiwan Available)**")
                     has_taiwan_stock = True
+                    has_any_alert = True
                 else:
-                    results.append(f"⚠️ **{name}** {link_str}: **IN STOCK (Cannot Ship to Taiwan)**")
+                    results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
+            
+            # --- 情況 B：未登入狀態 ---
             else:
-                results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
+                is_out_of_stock = out_of_stock_text in page_text
+                
+                print(f"[{name}] LoggedIn: False | OutOfStockText: {is_out_of_stock}")
+                
+                if is_out_of_stock:
+                    # 未登入但頁面明示缺貨 -> 精準判定缺貨
+                    results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
+                else:
+                    # 未登入且不是缺貨警語 -> 提示 Cookie 到期無法確認購買 state
+                    results.append(f"⚠️ **{name}** {link_str}: Cookie Expired / Not Logged In")
+                    has_any_alert = True
         else:
             results.append(f"⚠️ **{name}** {link_str}: HTTP {resp.status_code}")
     except Exception as e:
         results.append(f"⚠️ **{name}** {link_str}: Request Failed")
 
-# 3. 組合 Discord Embed 卡片（去識別化）
+# 3. 組合 Discord Embed 卡片
 now_utc = datetime.datetime.now(datetime.timezone.utc)
 taipei_tz = datetime.timezone(datetime.timedelta(hours=8))
 now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 # 設定卡片顏色與標題
 if has_taiwan_stock:
-    color = 3066993    # 綠色
+    color = 3066993    # 綠色：已登入且有貨可買
     title = "🚨 【IN STOCK ALERT】Taiwan Shipping Available"
 elif has_any_alert:
-    color = 16753920   # 橘色
-    title = "⚠️ 【STOCK NOTICE】In Stock (No Taiwan Shipping)"
+    color = 16753920   # 橘色：Cookie 失效提醒
+    title = "⚠️ 【SYSTEM NOTICE】Cookie Expired or Action Required"
 else:
-    color = 10038562   # 灰色/紅色
+    color = 10038562   # 灰色/紅色：全數缺貨
     title = "🔍 【Status Report】Inventory Monitor"
 
 embed = {
