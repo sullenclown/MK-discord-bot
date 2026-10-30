@@ -3,11 +3,13 @@ import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 讀取 Secrets 與環境變數
+# 1. 讀取 Secrets 與環境變數（100% 去識別化）
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+ACCOUNT_URL = os.getenv("ACCOUNT_URL")
 USER_COOKIE = os.getenv("USER_COOKIE", "")
 TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
 
+# 5 個品項設定（完全對應個別的 Secret 名稱）
 ITEMS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item I", "url": os.getenv("ITEM_I_URL")},
@@ -20,16 +22,30 @@ if not WEBHOOK_URL:
     print("❌ Error: DISCORD_WEBHOOK_URL is missing!")
     exit(1)
 
-results = []
-has_any_alert = False
-has_taiwan_stock = False
-
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 if USER_COOKIE:
     headers["Cookie"] = USER_COOKIE
+
+# 🔍 步驟 1：優先透過 Secrets 中的 ACCOUNT_URL 驗證登入狀態
+is_logged_in = False
+if USER_COOKIE and ACCOUNT_URL:
+    try:
+        acc_resp = requests.get(ACCOUNT_URL, headers=headers, timeout=10)
+        if acc_resp.status_code == 200 and "log out" in acc_resp.text.lower():
+            is_logged_in = True
+            print("✅ Login Verification: SUCCESS (LOG OUT found on account page)")
+        else:
+            print("⚠️ Login Verification: FAILED (LOG OUT not found or Cookie expired)")
+    except Exception as e:
+        print(f"⚠️ Account Check Failed: {e}")
+
+# 🔍 步驟 2：進行商品庫存與寄送區域檢測
+results = []
+has_any_alert = False
+has_taiwan_stock = False
 
 for item in ITEMS:
     url = item["url"]
@@ -48,24 +64,18 @@ for item in ITEMS:
             page_text = resp.text.lower()
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # 🔍 步驟 1：檢測是否成功處於「登入狀態」
-            # 登入後頁面通常會出現 logout / my account / my-account 等字眼
-            is_logged_in = any(k in page_text for k in ["logout", "log out", "my account", "my-account"])
-            
-            # 🔍 步驟 2：精準尋找 Add to Cart 按鈕（避免抓到純文字或腳本）
-            # 尋找是否有 class 或文字包含 add to cart 的按鈕
+            # 正向尋找是否有真實可購買的 Add to Cart 按鈕或元素
             cart_elements = soup.select(".single_add_to_cart_button, button.single_add_to_cart_button, input[name='add-to-cart']")
             has_add_to_cart = len(cart_elements) > 0 or ("add to cart" in page_text and "out of stock" not in page_text)
             
-            # 🔍 步驟 3：檢查運費選單是否有 Taiwan
+            # 檢查運費選單是否有 Taiwan
             has_taiwan_option = "taiwan" in page_text
             
-            # 印出 Log 方便在 GitHub Actions Console 中核對
-            print(f"[{name}] LoggedIn: {is_logged_in} | AddToCart: {has_add_to_cart} | TaiwanOpt: {has_taiwan_option}")
+            print(f"[{name}] AddToCart: {has_add_to_cart} | TaiwanOpt: {has_taiwan_option}")
             
+            # 狀態判定
             if not is_logged_in and USER_COOKIE:
-                # 代表 Cookie 已經失效了
-                results.append(f"⚠️ **{name}** {link_str}: Cookie Expired (Not Logged In)")
+                results.append(f"⚠️ **{name}** {link_str}: Cookie Expired / Not Logged In")
             elif has_add_to_cart:
                 has_any_alert = True
                 if has_taiwan_option:
@@ -78,13 +88,14 @@ for item in ITEMS:
         else:
             results.append(f"⚠️ **{name}** {link_str}: HTTP {resp.status_code}")
     except Exception as e:
-        results.append(f"⚠️ **{name}** {link_str}: Request Failed ({e})")
+        results.append(f"⚠️ **{name}** {link_str}: Request Failed")
 
-# 3. 組合 Discord Embed 卡片
+# 3. 組合 Discord Embed 卡片（去識別化）
 now_utc = datetime.datetime.now(datetime.timezone.utc)
 taipei_tz = datetime.timezone(datetime.timedelta(hours=8))
 now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
+# 設定卡片顏色與標題
 if has_taiwan_stock:
     color = 3066993    # 綠色
     title = "🚨 【IN STOCK ALERT】Taiwan Shipping Available"
@@ -113,3 +124,7 @@ payload = {
 }
 
 response = requests.post(WEBHOOK_URL, json=payload)
+if response.status_code in [200, 204]:
+    print("✅ Discord notification sent successfully!")
+else:
+    print(f"❌ Failed to send Discord notification: {response.status_code}")
