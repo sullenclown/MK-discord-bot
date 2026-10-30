@@ -2,7 +2,7 @@ import os
 import datetime
 import requests
 
-# 1. 讀取 Secrets 與環境變數（100% 去識別化，不殘留任何真實網址與品牌資訊）
+# 1. 讀取 Secrets 與環境變數（100% 去識別化）
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 USER_COOKIE = os.getenv("USER_COOKIE", "")
 TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
@@ -22,9 +22,10 @@ if not WEBHOOK_URL:
     print("❌ Error: DISCORD_WEBHOOK_URL is missing!")
     exit(1)
 
-# 商品頁面特徵警語關鍵字
+# 商品頁面特徵關鍵字
 out_of_stock_text = "this product is currently out of stock and unavailable."
 must_login_text = "you must register and login to shop."
+calc_shipping_text = "calculate shipping & handling fee"
 
 guest_headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -54,12 +55,14 @@ if TRIGGER_SOURCE == "Manual_Test":
             
             if resp.status_code == 200:
                 page_text = resp.text.lower()
-                has_must_login_msg = must_login_text in page_text
+                
+                # 精準登入判定：沒有未登入警語 且 包含運費計算區塊
+                is_logged_in = (must_login_text not in page_text) and (calc_shipping_text in page_text)
                 has_taiwan_option = "taiwan" in page_text
                 
-                print(f"[Manual Test Result] MustLogin: {has_must_login_msg} | TaiwanOption: {has_taiwan_option}")
+                print(f"[Manual Test Result] IsLoggedIn: {is_logged_in} | TaiwanOption: {has_taiwan_option}")
                 
-                if has_must_login_msg:
+                if not is_logged_in:
                     results.append("❌ **TEST RESULT**: Cookie Expired / Not Logged In")
                 else:
                     results.append("✅ **TEST RESULT**: Cookie Verified & Logged In!")
@@ -87,7 +90,7 @@ else:
         link_str = f"([Direct Link]({url}))" if url else ""
 
         try:
-            # 第一次請求：訪客身分無 Cookie 存取（降低暴露與失效風險）
+            # 第一次請求：訪客身分無 Cookie 存取
             resp = requests.get(url, headers=guest_headers, timeout=10)
             
             if resp.status_code == 200:
@@ -106,9 +109,11 @@ else:
                     
                     if auth_resp.status_code == 200:
                         auth_page_text = auth_resp.text.lower()
-                        has_must_login_msg = must_login_text in auth_page_text
                         
-                        if has_must_login_msg:
+                        # 雙向判定登入狀態
+                        is_logged_in = (must_login_text not in auth_page_text) and (calc_shipping_text in auth_page_text)
+                        
+                        if not is_logged_in:
                             results.append(f"⚠️ **{name}** {link_str}: **IN STOCK (Login Required / Update Cookie)**")
                             has_any_alert = True
                         else:
