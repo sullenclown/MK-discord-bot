@@ -19,6 +19,7 @@ if not WEBHOOK_URL:
     print("❌ Error: DISCORD_WEBHOOK_URL is missing!")
     exit(1)
 
+# 關鍵字設定
 out_of_stock_text = "this product is currently out of stock and unavailable."
 must_login_text = "you must register and login to shop."
 
@@ -29,7 +30,6 @@ headers = {
 if USER_COOKIE:
     headers["Cookie"] = USER_COOKIE
 
-# 🔍 步驟 2：直接檢測各商品頁面狀態
 results = []
 has_any_alert = False
 has_taiwan_stock = False
@@ -50,32 +50,32 @@ for item in ITEMS:
         if resp.status_code == 200:
             page_text = resp.text.lower()
             
-            # 關鍵字檢查
-            has_must_login_msg = must_login_text in page_text
+            # 第一步：優先檢查是否「全數缺貨」
             is_out_of_stock = out_of_stock_text in page_text
-            has_add_to_cart = "add to cart" in page_text
             
-            print(f"[{name}] MustLogin: {has_must_login_msg} | OutOfStockMsg: {is_out_of_stock} | AddToCart: {has_add_to_cart}")
+            if is_out_of_stock:
+                # 只要有缺貨警語，代表全規格缺貨，完全不需關心登入狀態
+                results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
             
-            # --- 情況 A：未登入 / Cookie 失效 ---
-            if has_must_login_msg:
-                if is_out_of_stock:
-                    # 未登入但頁面明示缺貨 -> 確定缺貨
-                    results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
-                else:
-                    # 未登入且非缺貨 -> 提醒 Cookie 失效
-                    results.append(f"⚠️ **{name}** {link_str}: Cookie Expired / Not Logged In")
-                    has_any_alert = True
-            
-            # --- 情況 B：已登入狀態 ---
             else:
-                if has_add_to_cart:
-                    # 已登入且包含 Add to Cart -> 有貨可購買
-                    results.append(f"✅ **{name}** {link_str}: **IN STOCK (Taiwan Available)**")
-                    has_taiwan_stock = True
+                # 第二步：無缺貨警語 = 肯定有貨！接著檢查登入狀態
+                has_must_login_msg = must_login_text in page_text
+                
+                if has_must_login_msg:
+                    # 【有貨但未登入】
+                    results.append(f"⚠️ **{name}** {link_str}: **IN STOCK (Login Required / Update Cookie)**")
                     has_any_alert = True
+                
                 else:
-                    results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
+                    # 【有貨且已登入】檢查選單有無 TAIWAN
+                    has_taiwan_option = "taiwan" in page_text
+                    has_any_alert = True
+                    
+                    if has_taiwan_option:
+                        results.append(f"✅ **{name}** {link_str}: **IN STOCK (Taiwan Available)**")
+                        has_taiwan_stock = True
+                    else:
+                        results.append(f"⚠️ **{name}** {link_str}: **IN STOCK (Cannot Ship to Taiwan)**")
         else:
             results.append(f"⚠️ **{name}** {link_str}: HTTP {resp.status_code}")
     except Exception as e:
@@ -88,11 +88,11 @@ now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 # 設定卡片顏色與標題
 if has_taiwan_stock:
-    color = 3066993    # 綠色：已登入且有貨可買
+    color = 3066993    # 綠色：完美符合（有貨且可寄台灣）
     title = "🚨 【IN STOCK ALERT】Taiwan Shipping Available"
 elif has_any_alert:
-    color = 16753920   # 橘色：Cookie 失效提醒
-    title = "⚠️ 【SYSTEM NOTICE】Cookie Expired or Action Required"
+    color = 16753920   # 橘色：有貨但未登入（需手動確認/更新Cookie）或無法寄台灣
+    title = "⚠️ 【SYSTEM NOTICE】In Stock Alert / Action Required"
 else:
     color = 10038562   # 灰色/紅色：全數缺貨
     title = "🔍 【Status Report】Inventory Monitor"
