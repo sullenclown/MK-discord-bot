@@ -35,6 +35,5 @@ jobs:
           ITEM_B_URL: ${{ secrets.ITEM_B_URL }}
           ITEM_C_URL: ${{ secrets.ITEM_C_URL }}
           ITEM_D_URL: ${{ secrets.ITEM_D_URL }}
-          ITEM_E_URL: ${{ secrets.ITEM_E_URL }}
           TRIGGER_SOURCE: ${{ inputs.trigger_source || 'cron-job.org' }}
         run: python check_stock.py
