@@ -8,7 +8,7 @@ WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 USER_COOKIE = os.getenv("USER_COOKIE", "")
 TRIGGER_SOURCE = os.getenv("TRIGGER_SOURCE", "Unknown Source")
 
-# 5 個品項設定（完全對應環境變數與代號）
+# 5 個品項設定（環境變數）
 ITEMS = [
     {"name": "Item A", "url": os.getenv("ITEM_A_URL")},
     {"name": "Item I", "url": os.getenv("ITEM_I_URL")},
@@ -21,11 +21,10 @@ if not WEBHOOK_URL:
     print("❌ Error: DISCORD_WEBHOOK_URL is missing!")
     exit(1)
 
-# 2. 爬蟲核心判定邏輯
-out_of_stock_text = "this product is currently out of stock and unavailable."
+# 2. 爬蟲核心判定邏輯（改為正向比對 "add to cart"）
 results = []
-has_any_alert = False      # 是否有任何商品有貨（發送卡片）
-has_taiwan_stock = False   # 是否有商品有貨且可寄台灣（發送卡片 + @everyone）
+has_any_alert = False      # 是否有任何商品有貨（觸發卡片）
+has_taiwan_stock = False   # 是否有商品有貨且可寄台灣（觸發卡片 + @everyone）
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -50,21 +49,25 @@ for item in ITEMS:
         if resp.status_code == 200:
             page_text = resp.text.lower()
             
-            # 判斷 1：是否缺貨
-            is_out_of_stock = out_of_stock_text in page_text
+            # 正向判定 1：檢查頁面中是否有 "add to cart" 按鈕（代表至少有一個規格有貨）
+            has_add_to_cart = "add to cart" in page_text
             
-            # 判斷 2：下拉選單是否包含 Taiwan 選項
+            # 判定 2：檢查運費選單中是否有 "taiwan" 選項
             has_taiwan_option = "taiwan" in page_text
             
-            if is_out_of_stock:
-                results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
-            else:
+            if has_add_to_cart:
                 has_any_alert = True
+                
+                # 有貨 + 可寄送台灣
                 if has_taiwan_option:
                     results.append(f"✅ **{name}** {link_str}: **IN STOCK (Taiwan Available)**")
                     has_taiwan_stock = True
+                # 有貨 + 無法寄送台灣
                 else:
                     results.append(f"⚠️ **{name}** {link_str}: **IN STOCK (Cannot Ship to Taiwan)**")
+            else:
+                # 頁面完全沒有 Add to Cart 按鈕，判定為全數缺貨
+                results.append(f"❌ **{name}** {link_str}: OUT OF STOCK")
         else:
             results.append(f"⚠️ **{name}** {link_str}: HTTP {resp.status_code}")
     except Exception as e:
@@ -75,7 +78,7 @@ now_utc = datetime.datetime.now(datetime.timezone.utc)
 taipei_tz = datetime.timezone(datetime.timedelta(hours=8))
 now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-# 設定不同狀況下的顏色與標題
+# 設定卡片顏色與標題
 if has_taiwan_stock:
     color = 3066993    # 綠色：完美符合（有貨且可寄台灣）
     title = "🚨 【IN STOCK ALERT】Taiwan Shipping Available"
@@ -102,8 +105,8 @@ payload = {
     "embeds": [embed]
 }
 
-# 只有在「有貨且可寄送台灣」時才帶入 @everyone 標記
-payload["content"] = "@everyone 🔔有商品補貨且可寄台灣囉！" if has_taiwan_stock else ""
+# 只有在「有貨且可寄送台灣」時才發送 @everyone 標記與鈴鐺 EMOJI
+payload["content"] = "@everyone 🔔 有商品補貨且可寄台灣囉！" if has_taiwan_stock else ""
 
 response = requests.post(WEBHOOK_URL, json=payload)
 if response.status_code in [200, 204]:
