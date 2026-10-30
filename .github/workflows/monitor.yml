@@ -3,37 +3,41 @@ name: Scheduled Status Checker
 on:
   workflow_dispatch:
     inputs:
-      trigger_source:
-        description: 'Trigger Source'
+      TRIGGER_SOURCE:
+        description: 'Trigger Source / Test Mode (Enter "Manual_Test" for Cookie check)'
         required: false
-        default: 'GitHub UI (Manual)'
+        default: 'Manual GitHub Trigger'
+  repository_dispatch:
+    types: [cron_job_trigger]
 
 jobs:
-  check-status:
+  check-stock:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install requests
 
-      - name: Run Stock Check
+      - name: Run Stock Check Script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          ACCOUNT_URL: ${{ secrets.ACCOUNT_URL }}
+          USER_COOKIE: ${{ secrets.USER_COOKIE }}
           ITEM_A_URL: ${{ secrets.ITEM_A_URL }}
           ITEM_I_URL: ${{ secrets.ITEM_I_URL }}
           ITEM_C_URL: ${{ secrets.ITEM_C_URL }}
           ITEM_Y_URL: ${{ secrets.ITEM_Y_URL }}
           ITEM_W_URL: ${{ secrets.ITEM_W_URL }}
-          USER_COOKIE: ${{ secrets.USER_COOKIE }}
-          TRIGGER_SOURCE: ${{ inputs.trigger_source || 'cron-job.org' }}
-        run: python check_stock.py
+          TEST_ITEM_URL: ${{ secrets.TEST_ITEM_URL }}
+          TRIGGER_SOURCE: ${{ github.event.inputs.TRIGGER_SOURCE || github.event.client_payload.source || 'External Cron Job' }}
+        run: |
+          python check_stock.py
