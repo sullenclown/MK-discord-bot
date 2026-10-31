@@ -144,10 +144,13 @@ embed = {
     "footer": {"text": f"Stock Monitor | Mode: {TRIGGER_SOURCE}"}
 }
 
-# 關鍵修改點：手動測試模式 (Manual_Test) 下強制不發送 @everyone 標記
+# 觸發通知文字判斷：日常監控下，有貨可寄台灣 或 有貨但未登入 皆發送 @everyone 標記
 content_text = ""
-if TRIGGER_SOURCE != "Manual_Test" and has_taiwan_stock:
-    content_text = "@everyone 🔔 有商品補貨且可寄台灣囉！"
+if TRIGGER_SOURCE != "Manual_Test":
+    if has_taiwan_stock:
+        content_text = "@everyone 🔔 有商品補貨且可寄台灣囉！"
+    elif has_any_alert:
+        content_text = "@everyone ⚠️ 有商品補貨，但目前未登入（請更新 Cookie）！"
 
 payload = {
     "username": "Stock Monitor Bot",
