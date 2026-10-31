@@ -144,10 +144,15 @@ embed = {
     "footer": {"text": f"Stock Monitor | Mode: {TRIGGER_SOURCE}"}
 }
 
+# 關鍵修改點：手動測試模式 (Manual_Test) 下強制不發送 @everyone 標記
+content_text = ""
+if TRIGGER_SOURCE != "Manual_Test" and has_taiwan_stock:
+    content_text = "@everyone 🔔 有商品補貨且可寄台灣囉！"
+
 payload = {
     "username": "Stock Monitor Bot",
     "embeds": [embed],
-    "content": "@everyone 🔔 有商品補貨且可寄台灣囉！" if has_taiwan_stock else ""
+    "content": content_text
 }
 
 response = requests.post(WEBHOOK_URL, json=payload)
