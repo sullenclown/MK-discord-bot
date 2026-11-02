@@ -127,7 +127,7 @@ elif has_taiwan_stock:
     color = 3066993    # 綠色：補貨且可寄台灣
     title = "💚【IN STOCK ALERT】Taiwan Shipping Available"
 elif has_no_taiwan_stock:
-    color = 3447003    # 藍色：有貨、已登入，但無法寄送台灣
+    color = 15844367    # 金黃色：有貨、已登入，但無法寄送台灣
     title = "💛【IN STOCK ALERT】In Stock (Cannot Ship to Taiwan)"
 elif has_login_required:
     color = 16753920   # 橘色：有貨但未登入 (Cookie 過期)
