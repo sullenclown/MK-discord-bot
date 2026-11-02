@@ -103,7 +103,7 @@ def check_single_item(item_name, item_url):
 # 🧪 模式 1：手動強制測試模式 (TRIGGER_SOURCE == "Manual_Test")
 # ---------------------------------------------------------
 if TRIGGER_SOURCE == "Manual_Test":
-    print("🧪 [MANUAL TEST MODE ACTIVATED]")
+    print("🧪[MANUAL TEST MODE ACTIVATED]")
     check_single_item("TEST ITEM", TEST_ITEM_URL)
 
 # ---------------------------------------------------------
@@ -122,16 +122,16 @@ now_taipei = now_utc.astimezone(taipei_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 if TRIGGER_SOURCE == "Manual_Test":
     color = 3447003    # 藍色：手動測試模式專屬
-    title = "🧪 【MANUAL TEST REPORT】Stock & Cookie Verification"
+    title = "🧪【MANUAL TEST REPORT】Stock & Cookie Verification"
 elif has_taiwan_stock:
     color = 3066993    # 綠色：補貨且可寄台灣
-    title = "🚨 【IN STOCK ALERT】Taiwan Shipping Available"
+    title = "💚【IN STOCK ALERT】Taiwan Shipping Available"
 elif has_no_taiwan_stock:
     color = 3447003    # 藍色：有貨、已登入，但無法寄送台灣
-    title = "⚠️ 【IN STOCK ALERT】In Stock (Cannot Ship to Taiwan)"
+    title = "💛【IN STOCK ALERT】In Stock (Cannot Ship to Taiwan)"
 elif has_login_required:
     color = 16753920   # 橘色：有貨但未登入 (Cookie 過期)
-    title = "⚠️ 【SYSTEM NOTICE】In Stock (Login Required)"
+    title = "🧡【SYSTEM NOTICE】In Stock (Login Required)"
 else:
     color = 10038562   # 灰色：全缺貨靜默報告
     title = "🔍 【Status Report】Inventory Monitor"
@@ -153,11 +153,11 @@ embed = {
 content_text = ""
 if TRIGGER_SOURCE != "Manual_Test":
     if has_taiwan_stock:
-        content_text = "@everyone 🔔 有商品補貨且可寄台灣囉！"
+        content_text = "@everyone 💚有商品補貨且可寄台灣囉！"
     elif has_no_taiwan_stock:
-        content_text = "@everyone ⚠️ 有商品補貨，但目前無法寄送台灣！"
+        content_text = "@everyone 💛有商品補貨，但目前無法寄送台灣！"
     elif has_login_required:
-        content_text = "@everyone ⚠️ 有商品補貨，但目前未登入（請更新 Cookie）！"
+        content_text = "@everyone 🧡有商品補貨，但目前未登入（請更新 Cookie）！"
 
 payload = {
     "username": "Stock Monitor Bot",
