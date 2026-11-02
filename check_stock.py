@@ -36,8 +36,9 @@ if USER_COOKIE:
     auth_headers["Cookie"] = USER_COOKIE
 
 results = []
-has_any_alert = False
-has_taiwan_stock = False
+has_taiwan_stock = False      # 綠色卡片：有貨 + 已登入 + 可寄台灣
+has_no_taiwan_stock = False   # 藍色卡片：有貨 + 已登入 + 無法寄台灣
+has_login_required = False    # 橘色卡片：有貨 + 未登入（或 Cookie 過期）
 
 
 def check_single_item(item_name, item_url):
@@ -46,7 +47,7 @@ def check_single_item(item_name, item_url):
     1. 訪客身份存取，若全數缺貨直接回傳，不登入也不檢查台灣選單。
     2. 若偵測到有貨，才帶入 Cookie 做登入與台灣運送選單驗證。
     """
-    global has_any_alert, has_taiwan_stock
+    global has_taiwan_stock, has_no_taiwan_stock, has_login_required
 
     if not item_url:
         results.append(f"❓ **{item_name}**: Secret URL Missing")
@@ -80,16 +81,16 @@ def check_single_item(item_name, item_url):
 
                     if not is_logged_in:
                         results.append(f"⚠️ **{item_name}** {link_str}: **IN STOCK (Login Required / Update Cookie)**")
-                        has_any_alert = True
+                        has_login_required = True
                     else:
                         has_taiwan_option = "taiwan" in auth_page_text
-                        has_any_alert = True
 
                         if has_taiwan_option:
                             results.append(f"✅ **{item_name}** {link_str}: **IN STOCK (Taiwan Available)**")
                             has_taiwan_stock = True
                         else:
                             results.append(f"⚠️ **{item_name}** {link_str}: **IN STOCK (Cannot Ship to Taiwan)**")
+                            has_no_taiwan_stock = True
                 else:
                     results.append(f"⚠️ **{item_name}** {link_str}: Auth HTTP {auth_resp.status_code}")
         else:
@@ -103,7 +104,6 @@ def check_single_item(item_name, item_url):
 # ---------------------------------------------------------
 if TRIGGER_SOURCE == "Manual_Test":
     print("🧪 [MANUAL TEST MODE ACTIVATED]")
-    has_any_alert = True
     check_single_item("TEST ITEM", TEST_ITEM_URL)
 
 # ---------------------------------------------------------
@@ -114,7 +114,7 @@ else:
         check_single_item(item["name"], item["url"])
 
 # ---------------------------------------------------------
-# 3. 組合 Discord Embed 卡片並發送
+# 3. 組合 Discord Embed 卡片顏色與標題
 # ---------------------------------------------------------
 now_utc = datetime.datetime.now(datetime.timezone.utc)
 taipei_tz = datetime.timezone(datetime.timedelta(hours=8))
@@ -124,11 +124,14 @@ if TRIGGER_SOURCE == "Manual_Test":
     color = 3447003    # 藍色：手動測試模式專屬
     title = "🧪 【MANUAL TEST REPORT】Stock & Cookie Verification"
 elif has_taiwan_stock:
-    color = 3066993    # 綠色：補貨可寄台灣
+    color = 3066993    # 綠色：補貨且可寄台灣
     title = "🚨 【IN STOCK ALERT】Taiwan Shipping Available"
-elif has_any_alert:
-    color = 16753920   # 橘色：未登入警告或無法寄台灣
-    title = "⚠️ 【SYSTEM NOTICE】In Stock Alert / Action Required"
+elif has_no_taiwan_stock:
+    color = 3447003    # 藍色：有貨、已登入，但無法寄送台灣
+    title = "⚠️ 【SYSTEM NOTICE】In Stock (Cannot Ship to Taiwan)"
+elif has_login_required:
+    color = 16753920   # 橘色：有貨但未登入 (Cookie 過期)
+    title = "⚠️ 【SYSTEM NOTICE】In Stock (Login Required)"
 else:
     color = 10038562   # 灰色：全缺貨靜默報告
     title = "🔍 【Status Report】Inventory Monitor"
@@ -144,12 +147,16 @@ embed = {
     "footer": {"text": f"Stock Monitor | Mode: {TRIGGER_SOURCE}"}
 }
 
-# 觸發通知文字判斷：日常監控下，有貨可寄台灣 或 有貨但未登入 皆發送 @everyone 標記
+# ---------------------------------------------------------
+# 4. 觸發 @everyone 通知文字判斷（日常監控模式）
+# ---------------------------------------------------------
 content_text = ""
 if TRIGGER_SOURCE != "Manual_Test":
     if has_taiwan_stock:
         content_text = "@everyone 🔔 有商品補貨且可寄台灣囉！"
-    elif has_any_alert:
+    elif has_no_taiwan_stock:
+        content_text = "@everyone ⚠️ 有商品補貨，但目前無法寄送台灣！"
+    elif has_login_required:
         content_text = "@everyone ⚠️ 有商品補貨，但目前未登入（請更新 Cookie）！"
 
 payload = {
